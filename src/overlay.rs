@@ -1,11 +1,11 @@
-use deathloop_cheat::GameProcess;
+﻿use deathloop_cheat::GameProcess;
 use pixels::{Pixels, SurfaceTexture};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
     window::{WindowBuilder, WindowLevel},
 };
-use winit::raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+use winit::raw_window_handle::{RawWindowHandle, HasWindowHandle};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     SetWindowLongPtrW, GetWindowLongPtrW, SetLayeredWindowAttributes, GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TRANSPARENT,
 };
@@ -36,7 +36,7 @@ impl OverlayApp {
             .build(&event_loop)?;
 
         // Make mouse passthrough and transparent
-        let hwnd = match window.raw_window_handle().unwrap() {
+        let hwnd = match window.window_handle().unwrap().as_raw() {
             RawWindowHandle::Win32(handle) => handle.hwnd.get() as *mut std::ffi::c_void,
             _ => panic!("Not a Win32 window"),
         };
@@ -67,7 +67,7 @@ impl OverlayApp {
     pub fn run(self) {
         let OverlayApp { event_loop, window, mut pixels, font, game_process } = self;
 
-        event_loop.run(move |event, event_loop| {
+        let _ = event_loop.run(move |event, event_loop| {
             match event {
                 Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
                     event_loop.exit();
@@ -128,3 +128,4 @@ fn draw_text(frame: &mut [u8], font: &Font, text: &str, x: f32, y: f32, color: [
         }
     }
 }
+
