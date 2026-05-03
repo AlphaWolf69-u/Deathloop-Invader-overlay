@@ -11,3 +11,5 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Threading",
     "Win32_System_Diagnostics_ToolHelp",
 ] }
+
+eframe = { version = "0.28", features = ["default"] }
