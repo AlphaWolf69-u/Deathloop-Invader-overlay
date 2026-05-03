@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "memory"
+name = "deathloop-cheat"
 version = "0.1.0"
 dependencies = [
  "windows-sys",

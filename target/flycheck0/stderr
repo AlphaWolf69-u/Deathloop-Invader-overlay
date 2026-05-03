@@ -1,0 +1,207 @@
+   0.069017300s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop_cheat"}: cargo::core::compiler::fingerprint: fingerprint error for deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory)/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("deathloop_cheat", ["lib"], "D:\\Docs\\Macrosы\\MyCheats\\Rust cheats\\memory\\src\\lib.rs", Edition2024) }
+   0.069054300s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop_cheat"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\deathloop-cheat-32b65be1e02f5af6\lib-deathloop_cheat`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.077902600s  INFO prepare_target{force=false package_id=windows-sys v0.59.0 target="windows_sys"}: cargo::core::compiler::fingerprint: fingerprint error for windows-sys v0.59.0/Check { test: false }/TargetInner { tested: false, doctest: false, ..: lib_target("windows_sys", ["lib"], "C:\\Users\\alphawolf\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\windows-sys-0.59.0\\src\\lib.rs", Edition2021) }
+   0.077917300s  INFO prepare_target{force=false package_id=windows-sys v0.59.0 target="windows_sys"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\windows-sys-de9c5a89969d3b85\lib-windows_sys`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_libgit2_prerelease
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: git_midx_writer_dump
+  18: git_filter_source_repo
+  19: git_midx_writer_dump
+  20: BaseThreadInitThunk
+  21: RtlUserThreadStart
+   0.078264500s  INFO prepare_target{force=false package_id=windows-targets v0.52.6 target="windows_targets"}: cargo::core::compiler::fingerprint: fingerprint error for windows-targets v0.52.6/Check { test: false }/TargetInner { ..: lib_target("windows_targets", ["lib"], "C:\\Users\\alphawolf\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\windows-targets-0.52.6\\src\\lib.rs", Edition2021) }
+   0.078277000s  INFO prepare_target{force=false package_id=windows-targets v0.52.6 target="windows_targets"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\windows-targets-c2a5364b2959cf14\lib-windows_targets`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_libgit2_prerelease
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: git_midx_writer_dump
+  19: git_filter_source_repo
+  20: git_midx_writer_dump
+  21: BaseThreadInitThunk
+  22: RtlUserThreadStart
+   0.078565900s  INFO prepare_target{force=false package_id=windows_x86_64_msvc v0.52.6 target="windows_x86_64_msvc"}: cargo::core::compiler::fingerprint: fingerprint error for windows_x86_64_msvc v0.52.6/Check { test: false }/TargetInner { ..: lib_target("windows_x86_64_msvc", ["lib"], "C:\\Users\\alphawolf\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\windows_x86_64_msvc-0.52.6\\src\\lib.rs", Edition2021) }
+   0.078577800s  INFO prepare_target{force=false package_id=windows_x86_64_msvc v0.52.6 target="windows_x86_64_msvc"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\windows_x86_64_msvc-63dc81e34ef0c080\lib-windows_x86_64_msvc`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_filter_source_repo
+  12: git_filter_source_repo
+  13: git_filter_source_repo
+  14: git_libgit2_prerelease
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: git_midx_writer_dump
+  20: git_filter_source_repo
+  21: git_midx_writer_dump
+  22: BaseThreadInitThunk
+  23: RtlUserThreadStart
+   0.079392100s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop_cheat"}: cargo::core::compiler::fingerprint: fingerprint error for deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory)/Check { test: true }/TargetInner { name_inferred: true, ..: lib_target("deathloop_cheat", ["lib"], "D:\\Docs\\Macrosы\\MyCheats\\Rust cheats\\memory\\src\\lib.rs", Edition2024) }
+   0.079405800s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop_cheat"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\deathloop-cheat-6c7135837dc006bc\test-lib-deathloop_cheat`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.079727600s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop-cheat"}: cargo::core::compiler::fingerprint: fingerprint error for deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory)/Check { test: false }/TargetInner { name: "deathloop-cheat", doc: true, ..: with_path("D:\\Docs\\Macrosы\\MyCheats\\Rust cheats\\memory\\src\\main.rs", Edition2024) }
+   0.079740600s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop-cheat"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\deathloop-cheat-d06ce88216eab895\bin-deathloop-cheat`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+   0.080050400s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop-cheat"}: cargo::core::compiler::fingerprint: fingerprint error for deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory)/Check { test: true }/TargetInner { name: "deathloop-cheat", doc: true, ..: with_path("D:\\Docs\\Macrosы\\MyCheats\\Rust cheats\\memory\\src\\main.rs", Edition2024) }
+   0.080062400s  INFO prepare_target{force=false package_id=deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory) target="deathloop-cheat"}: cargo::core::compiler::fingerprint:     err: failed to read `D:\Docs\Macrosы\MyCheats\Rust cheats\memory\target\debug\.fingerprint\deathloop-cheat-5e60e84b0567b731\test-bin-deathloop-cheat`
+
+Caused by:
+    Не удается найти указанный файл. (os error 2)
+
+Stack backtrace:
+   0: git_midx_writer_dump
+   1: git_midx_writer_dump
+   2: git_midx_writer_dump
+   3: git_midx_writer_dump
+   4: git_filter_source_repo
+   5: git_filter_source_repo
+   6: git_filter_source_repo
+   7: git_filter_source_repo
+   8: git_filter_source_repo
+   9: git_filter_source_repo
+  10: git_filter_source_repo
+  11: git_libgit2_prerelease
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: git_midx_writer_dump
+  17: git_filter_source_repo
+  18: git_midx_writer_dump
+  19: BaseThreadInitThunk
+  20: RtlUserThreadStart
+    Checking windows_x86_64_msvc v0.52.6
+    Checking windows-targets v0.52.6
+    Checking windows-sys v0.59.0
+    Checking deathloop-cheat v0.1.0 (D:\Docs\Macrosы\MyCheats\Rust cheats\memory)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.10s
