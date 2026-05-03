@@ -51,21 +51,18 @@ impl GameProcess {
     }
 
     pub fn read_string(&self, address: u64, max_len: usize) -> String {
-        let mut buffer = vec![0u8; max_len];
-        let mut bytes_read = 0usize;
-
+        let mut buf = vec![0u8; max_len];
         unsafe {
             ReadProcessMemory(
                 self.handle,
                 address as _,
-                buffer.as_mut_ptr() as _,
+                buf.as_mut_ptr() as _,
                 max_len,
-                &mut bytes_read,
+                std::ptr::null_mut(),
             );
         }
-
-        let real_len = buffer.iter().position(|&b| b == 0).unwrap_or(bytes_read);
-        String::from_utf8_lossy(&buffer[0..real_len]).to_string()
+        let null_pos = buf.iter().position(|&b| b == 0).unwrap_or(max_len);
+        String::from_utf8_lossy(&buf[..null_pos]).to_string()
     }
 
     pub fn close(self) {
