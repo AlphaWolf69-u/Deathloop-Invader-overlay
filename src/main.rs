@@ -7,7 +7,6 @@ use windows_sys::Win32::{
         },
         ProcessStatus::EnumProcesses,
         Threading::{OpenProcess, PROCESS_VM_READ, PROCESS_QUERY_INFORMATION},
-        WindowsProgramming::GetModuleBaseNameA,
     },
 };
 
@@ -55,11 +54,10 @@ fn main() {
     let real_len = buffer.iter().position(|&b| b == 0).unwrap_or(bytes_read);
     let name = std::str::from_utf8(&buffer[0..real_len]).unwrap_or("<invalid>");
 
-    println!("Host name: '{}'", name);
-    println!("Length: {}", name.len());
 
-    println!("Reading every 5 seconds...");
+    println!("\nReading every 5 seconds... (Ctrl+C to stop)");
     loop {
+        println!("✅ Host name: '{}'", name);
         thread::sleep(Duration::from_secs(5));
     }
 }
@@ -83,7 +81,10 @@ fn find_process_by_name(name: &str) -> Option<u32> {
         if h.is_null() { continue; }
 
         let mut module_buf = [0u8; 260];
-        unsafe { GetModuleBaseNameA(h, 0, module_buf.as_mut_ptr(), module_buf.len() as u32); }
+        // Use K32GetModuleBaseNameA from kernel32 (more reliable)
+        unsafe { windows_sys::Win32::System::ProcessStatus::K32GetModuleBaseNameA(
+            h, std::ptr::null_mut(), module_buf.as_mut_ptr(), module_buf.len() as u32
+        ); }
         unsafe { CloseHandle(h); }
 
         if let Ok(m) = std::str::from_utf8(&module_buf) {
@@ -108,7 +109,6 @@ fn get_module_base(pid: u32, module_name: &str) -> Option<u64> {
 
     if unsafe { Module32First(snapshot, &mut me) } != 0 {
         loop {
-            // Fixed: convert [i8; 256] to &[u8]
             let mod_name = unsafe {
                 let slice = std::slice::from_raw_parts(me.szModule.as_ptr() as *const u8, me.szModule.len());
                 std::str::from_utf8(slice)
