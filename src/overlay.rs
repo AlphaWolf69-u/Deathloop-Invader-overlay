@@ -1,5 +1,6 @@
 ﻿use deathloop_cheat::GameProcess;
 use pixels::{Pixels, SurfaceTexture};
+use pixels::wgpu::Color;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -48,12 +49,15 @@ impl OverlayApp {
         }
 
         let surface_texture = SurfaceTexture::new(WIDTH, HEIGHT, &window);
-        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture)?;
+        let mut pixels = Pixels::new(WIDTH, HEIGHT, surface_texture)?;
+        pixels.clear_color(Color::TRANSPARENT);
 
-        // Load font - using a simple font, assuming we have it
-        // For now, use a default or panic
-        let font_data = include_bytes!("../assets/arial.ttf"); // Need to download this
-        let font = Font::try_from_bytes(font_data).expect("Failed to load font");
+        // Load font - prefer IBM Plex Sans Bold from assets if available.
+        let font_data = std::fs::read("../assets/IBMPlexSans-Bold.ttf").unwrap_or_else(|_| {
+            eprintln!("Warning: IBMPlexSans-Bold.ttf not found in assets; using Arial fallback.");
+            include_bytes!("../assets/arial.ttf").to_vec()
+        });
+        let font = Font::try_from_vec(font_data).expect("Failed to load font");
 
         Ok(Self {
             game_process,
