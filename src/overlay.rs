@@ -12,8 +12,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 use rusttype::{Font, Scale, point};
 
-const WIDTH: u32 = 400;
-const HEIGHT: u32 = 200;
+const WIDTH: u32 = 280;
+const HEIGHT: u32 = 20;
 
 pub struct OverlayApp {
     game_process: GameProcess,
@@ -53,8 +53,11 @@ impl OverlayApp {
         pixels.clear_color(Color::TRANSPARENT);
 
         // Load font - prefer IBM Plex Sans Bold from assets if available.
-        let font_data = std::fs::read("../assets/IBMPlexSans-Bold.ttf").unwrap_or_else(|_| {
-            eprintln!("Warning: IBMPlexSans-Bold.ttf not found in assets; using Arial fallback.");
+        let font_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join("IBMPlexSans-Bold.ttf");
+        let font_data = std::fs::read(&font_path).unwrap_or_else(|_| {
+            eprintln!("Warning: IBMPlexSans-Bold.ttf not found at {}; using Arial fallback.", font_path.display());
             include_bytes!("../assets/arial.ttf").to_vec()
         });
         let font = Font::try_from_vec(font_data).expect("Failed to load font");
@@ -78,9 +81,8 @@ impl OverlayApp {
                 }
                 Event::AboutToWait => {
                     // Update and redraw
-                    let host_name = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "Unknown".to_string());
                     let addr = game_process.base_address + 0x3335638;
-                    let game_string = game_process.read_string(addr, 256);
+                    let host_name = game_process.read_string(addr, 256);
 
                     // Render
                     let frame = pixels.frame_mut();
@@ -93,8 +95,7 @@ impl OverlayApp {
                     }
 
                     // Draw text
-                    draw_text(frame, &font, &format!("Host: {}", host_name), 10.0, 10.0, [255, 255, 255, 255], WIDTH as f32, HEIGHT as f32);
-                    draw_text(frame, &font, &format!("Game: {}", game_string), 10.0, 40.0, [255, 255, 255, 255], WIDTH as f32, HEIGHT as f32);
+                    draw_text(frame, &font, &format!("HOST NAME: {}", host_name), 0.0, 0.0, [255, 255, 255, 255], WIDTH as f32, HEIGHT as f32);
 
                     // Render
                     if let Err(e) = pixels.render() {
