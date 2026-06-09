@@ -52,14 +52,14 @@ impl OverlayApp {
         let mut pixels = Pixels::new(WIDTH, HEIGHT, surface_texture)?;
         pixels.clear_color(Color::TRANSPARENT);
 
-        // Load font - prefer IBM Plex Sans Bold from assets if available.
-        let font_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("assets")
-            .join("IBMPlexSans-Bold.ttf");
-        let font_data = std::fs::read(&font_path).unwrap_or_else(|_| {
-            eprintln!("Warning: IBMPlexSans-Bold.ttf not found at {}; using Arial fallback.", font_path.display());
-            include_bytes!("../assets/arial.ttf").to_vec()
-        });
+                // Load font - Handselson Two from assets with fallback
+                let font_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("assets")
+                    .join("handselson-two.otf");
+                let font_data = std::fs::read(&font_path).unwrap_or_else(|_| {
+                    eprintln!("Warning: handselson-two.otf not found at {}; using Arial fallback.", font_path.display());
+                    include_bytes!("../assets/arial.ttf").to_vec()
+                });
         let font = Font::try_from_vec(font_data).expect("Failed to load font");
 
         Ok(Self {
@@ -101,7 +101,7 @@ impl OverlayApp {
                     }
 
                     // Draw text
-                    draw_text(frame, &font, &format!("HOST NAME: {}", host_name), 0.0, 0.0, [255, 255, 255, 255], WIDTH as f32, HEIGHT as f32);
+                    draw_text(frame, &font, &format!("Host: {}", host_name), 0.0, 0.0, [255, 255, 255, 255], WIDTH as f32, HEIGHT as f32);
 
                     // Render
                     if let Err(e) = pixels.render() {
