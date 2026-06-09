@@ -34,38 +34,53 @@ impl GameProcess {
         Ok(GameProcess { handle, base_address, pid })
     }
 
-    pub fn read_memory<T: Copy>(&self, address: u64) -> T {
+    pub fn read_memory<T: Copy>(&self, address: u64) -> Result<T, String> {
         let mut value = unsafe { std::mem::zeroed() };
         let size = std::mem::size_of::<T>();
+        let mut bytes_read = 0usize;
 
-        unsafe {
+        let success = unsafe {
             ReadProcessMemory(
                 self.handle,
                 address as _,
                 &mut value as *mut _ as _,
                 size,
-                std::ptr::null_mut(),
-            );
+                &mut bytes_read,
+            )
+        };
+
+        if success == 0 || bytes_read != size {
+            return Err(format!("Failed to read memory at {:X}", address));
         }
-        value
+
+        Ok(value)
     }
 
-    pub fn read_string(&self, address: u64, max_len: usize) -> String {
+    pub fn read_string(&self, address: u64, max_len: usize) -> Result<String, String> {
         let mut buf = vec![0u8; max_len];
-        unsafe {
+        let mut bytes_read = 0usize;
+
+        let success = unsafe {
             ReadProcessMemory(
                 self.handle,
                 address as _,
                 buf.as_mut_ptr() as _,
                 max_len,
-                std::ptr::null_mut(),
-            );
-        }
-        let null_pos = buf.iter().position(|&b| b == 0).unwrap_or(max_len);
-        String::from_utf8_lossy(&buf[..null_pos]).to_string()
-    }
+                &mut bytes_read,
+            )
+        };
 
-    pub fn close(self) {
+        if success == 0 {
+            return Err(format!("Failed to read string at {:X}", address));
+        }
+
+        let null_pos = buf.iter().position(|&b| b == 0).unwrap_or(bytes_read);
+        Ok(String::from_utf8_lossy(&buf[..null_pos]).to_string())
+    }
+}
+
+impl Drop for GameProcess {
+    fn drop(&mut self) {
         unsafe { CloseHandle(self.handle); }
     }
 }

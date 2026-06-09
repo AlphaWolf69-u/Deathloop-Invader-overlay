@@ -82,7 +82,13 @@ impl OverlayApp {
                 Event::AboutToWait => {
                     // Update and redraw
                     let addr = game_process.base_address + 0x3335638;
-                    let host_name = game_process.read_string(addr, 256);
+                    let host_name = match game_process.read_string(addr, 256) {
+                        Ok(name) => name,
+                        Err(e) => {
+                            eprintln!("Failed to read host name: {}", e);
+                            "Error".to_string()
+                        }
+                    };
 
                     // Render
                     let frame = pixels.frame_mut();
