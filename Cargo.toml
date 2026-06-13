@@ -12,5 +12,4 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_UI_WindowsAndMessaging",
 ] }
-winapi = { version = "0.3", features = ["winuser", "windef"] }
-eframe = "0.22"
+eframe = "0.34.3"
