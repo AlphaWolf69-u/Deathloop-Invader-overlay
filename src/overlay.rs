@@ -21,7 +21,8 @@ impl OverlayApp {
             .with_decorations(false)
             .with_transparent(true)
             .with_window_level(egui::WindowLevel::AlwaysOnTop)
-            .with_resizable(false);
+            .with_resizable(false)
+            .with_mouse_passthrough(true);
 
         let native_options = NativeOptions {
             viewport,
@@ -71,33 +72,32 @@ impl eframe::App for TextApp {
         let mut visuals = egui::Visuals::dark();
 
         visuals.override_text_color = Some(egui::Color32::WHITE);
+
+        visuals.widgets.noninteractive.bg_fill = egui::Color32::TRANSPARENT;
         visuals.widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+        visuals.widgets.hovered.bg_fill = egui::Color32::TRANSPARENT;
+        visuals.widgets.active.bg_fill = egui::Color32::TRANSPARENT;
+
         visuals.panel_fill = egui::Color32::TRANSPARENT;
         visuals.faint_bg_color = egui::Color32::TRANSPARENT;
         visuals.extreme_bg_color = egui::Color32::TRANSPARENT;
 
         ui.ctx().set_visuals(visuals);
 
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
-            .show_inside(ui, |ui| {
-                ui.horizontal_centered(|ui| {
-                    let addr = self.game_process.base_address + 0x3335638;
+        ui.horizontal_centered(|ui| {
+            let addr = self.game_process.base_address + 0x3335638;
 
-                    let label = match self.game_process.read_string(addr, 256) {
-                        Ok(name) => format!("Host: {}", name),
-                        Err(e) => format!("Error: {}", e),
-                    };
+            let label = match self.game_process.read_string(addr, 256) {
+                Ok(name) => format!("Host: {}", name),
+                Err(e) => format!("Error: {}", e),
+            };
 
-                    ui.label(
-                        egui::RichText::new(label)
-                            .size(20.0)
-                            .color(egui::Color32::WHITE),
-                    );
-                });
-
-                ui.add_space(6.0);
-            });
+            ui.label(
+                egui::RichText::new(label)
+                    .size(20.0)
+                    .color(egui::Color32::WHITE),
+            );
+        });
 
         ui.ctx().request_repaint();
     }
