@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-windows-sys = { version = "0.59", features = [
+windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_ProcessStatus",
@@ -12,8 +12,5 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_UI_WindowsAndMessaging",
 ] }
-
-winit = { version = "0.29", features = ["rwh_05"] }
-pixels = "0.13"
-rusttype = "0.9"
+winapi = { version = "0.3", features = ["winuser", "windef"] }
 eframe = "0.22"
