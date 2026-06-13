@@ -16,3 +16,4 @@ windows-sys = { version = "0.59", features = [
 winit = { version = "0.29", features = ["rwh_05"] }
 pixels = "0.13"
 rusttype = "0.9"
+eframe = "0.22"
