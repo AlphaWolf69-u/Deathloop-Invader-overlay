@@ -1,3 +1,8 @@
+/// Memory reading utilities for interacting with the Deathloop process.
+///
+/// This module provides the `GameProcess` struct which wraps Windows API calls
+/// to attach to a game process, read its memory, and retrieve strings.
+
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE},
     System::{
@@ -10,13 +15,28 @@ use windows_sys::Win32::{
     },
 };
 
+/// Represents an attached game process for memory reading.
+///
+/// Wraps a Windows process handle along with the base address of the target module
+/// and the process ID. Provides methods for reading arbitrary memory values and strings.
 pub struct GameProcess {
+    /// Windows handle to the target process.
     pub handle: HANDLE,
+    /// Base memory address of the loaded module.
     pub base_address: u64,
+    /// Process ID of the target process.
     pub pid: u32,
 }
 
 impl GameProcess {
+    /// Attaches to a running process by name and finds its module base address.
+    ///
+    /// # Arguments
+    /// * `process_name` - Name of the executable process to attach to (e.g., "Deathloop.exe")
+    /// * `module_name` - Name of the module to find the base address of
+    ///
+    /// # Returns
+    /// A `GameProcess` instance on success, or an error string on failure.
     pub fn attach(process_name: &str, module_name: &str) -> Result<Self, String> {
         let pid = find_process_by_name(process_name)
             .ok_or_else(|| format!("Process {} not found", process_name))?;
@@ -34,6 +54,13 @@ impl GameProcess {
         Ok(GameProcess { handle, base_address, pid })
     }
 
+    /// Reads a value of type `T` from the specified memory address.
+    ///
+    /// # Arguments
+    /// * `address` - Absolute memory address to read from
+    ///
+    /// # Returns
+    /// The decoded value of type `T` on success, or an error string.
     pub fn read_memory<T: Copy>(&self, address: u64) -> Result<T, String> {
         let mut value = unsafe { std::mem::zeroed() };
         let size = std::mem::size_of::<T>();
@@ -56,6 +83,14 @@ impl GameProcess {
         Ok(value)
     }
 
+    /// Reads a null-terminated UTF-8 string from the specified memory address.
+    ///
+    /// # Arguments
+    /// * `address` - Absolute memory address to read from
+    /// * `max_len` - Maximum number of bytes to read
+    ///
+    /// # Returns
+    /// A `String` on success, or an error string.
     pub fn read_string(&self, address: u64, max_len: usize) -> Result<String, String> {
         let mut buf = vec![0u8; max_len];
         let mut bytes_read = 0usize;
@@ -79,6 +114,7 @@ impl GameProcess {
     }
 }
 
+/// Automatically closes the process handle when `GameProcess` is dropped.
 impl Drop for GameProcess {
     fn drop(&mut self) {
         unsafe { CloseHandle(self.handle); }
@@ -86,6 +122,10 @@ impl Drop for GameProcess {
 }
 
 
+/// Finds the process ID of a running process by its executable name.
+///
+/// Enumerates all processes using `EnumProcesses` and matches the name
+/// using `K32GetModuleBaseNameA` for reliable name retrieval.
 fn find_process_by_name(name: &str) -> Option<u32> {
     let mut pids = [0u32; 1024];
     let mut bytes_returned = 0u32;
@@ -118,6 +158,10 @@ fn find_process_by_name(name: &str) -> Option<u32> {
     None
 }
 
+/// Finds the base address of a loaded module within a process.
+///
+/// Uses the Module32 API to enumerate modules in the target process
+/// and returns the base address of the matching module.
 fn get_module_base(pid: u32, module_name: &str) -> Option<u64> {
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid) };
     if snapshot.is_null() {

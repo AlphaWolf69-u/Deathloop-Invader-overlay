@@ -1,4 +1,9 @@
-﻿use deathloop_invader_tool::GameProcess;
+﻿/// Overlay rendering module for the Deathloop Invader Tool.
+///
+/// Creates a transparent, topmost overlay window that reads and displays
+/// information from the Deathloop game process memory.
+
+use deathloop_invader_tool::GameProcess;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::mem::{size_of, zeroed};
@@ -21,14 +26,25 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 };
 use windows_sys::Win32::Foundation::SIZE;
 
+/// Windows class name for the overlay window.
 const WINDOW_CLASS_NAME: &str = "DeathloopOverlayWindow";
+/// Window title displayed in the overlay.
 const WINDOW_TITLE: &str = "Alpha Wolf's Invader Tool Overlay";
+/// Width of the overlay window in pixels.
 const OVERLAY_WIDTH: i32 = 300;
+/// Height of the overlay window in pixels.
 const OVERLAY_HEIGHT: i32 = 40;
+/// Timer ID used for periodic overlay updates.
 const TIMER_ID: usize = 1;
+/// Interval between overlay refreshes in milliseconds (100ms = 10 FPS).
 const TIMER_INTERVAL_MS: u32 = 100;
+/// Embedded font data loaded at compile time from the assets directory.
 const FONT_DATA: &[u8] = include_bytes!("../assets/handelson-two.otf");
 
+/// Registers the embedded font with Windows GDI.
+///
+/// Adds the font data to the system font table so it can be used
+/// with `CreateFontIndirectW` for rendering text on the overlay.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn register_font() -> Result<*mut core::ffi::c_void, Box<dyn std::error::Error>> {
     let mut num_fonts = 0;
@@ -48,12 +64,20 @@ unsafe fn register_font() -> Result<*mut core::ffi::c_void, Box<dyn std::error::
     }
 }
 
+/// Main application struct that holds the game process handle and font resource.
+///
+/// Manages the lifecycle of the overlay including process attachment,
+/// window creation, and cleanup.
 pub struct OverlayApp {
+    /// Handle to the attached Deathloop game process.
     game_process: GameProcess,
+    /// Opaque handle to the registered font resource (must be cleaned up on drop).
     font_mem_resource: *mut core::ffi::c_void,
 }
 
 impl OverlayApp {
+    /// Creates a new `OverlayApp` by attaching to the Deathloop process
+    /// and registering the embedded font.
     pub fn new() -> Result<Self, Box<dyn Error>> {
         let game_process = GameProcess::attach("Deathloop.exe", "Deathloop.exe")?;
         let font_mem_resource = unsafe { register_font()? };
@@ -63,6 +87,8 @@ impl OverlayApp {
         })
     }
 
+    /// Runs the overlay application: registers the window class,
+    /// creates a layered transparent window, and enters the message loop.
     pub fn run(self) {
         unsafe {
             let hinstance = GetModuleHandleW(null());
@@ -112,6 +138,10 @@ impl OverlayApp {
     }
 }
 
+/// Windows procedure (callback) for the overlay window.
+///
+/// Handles window creation, timer events for periodic rendering,
+/// and window destruction for cleanup.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
@@ -156,6 +186,7 @@ unsafe extern "system" fn window_proc(
     }
 }
 
+/// Retrieves the `OverlayApp` pointer stored in the window's user data.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn get_app_ptr(hwnd: HWND) -> Option<*mut OverlayApp> {
     let ptr = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut OverlayApp;
@@ -166,11 +197,14 @@ unsafe fn get_app_ptr(hwnd: HWND) -> Option<*mut OverlayApp> {
     }
 }
 
+/// Retrieves a mutable reference to the `OverlayApp` from the window's user data.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn get_app(hwnd: HWND) -> Option<&'static mut OverlayApp> {
     get_app_ptr(hwnd).map(|ptr| &mut *ptr)
 }
 
+/// Renders the overlay: reads game memory, draws text onto a bitmap,
+/// and updates the layered window with the new frame.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
     let text = match app.game_process.read_string(app.game_process.base_address + 0x3335638, 256) {
@@ -277,6 +311,9 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
     ReleaseDC(null_mut(), hdc_screen);
 }
 
+/// Converts a Rust `&str` to a null-terminated UTF-16 wide string (`Vec<u16>`).
+///
+/// Used for passing string data to Windows API functions that expect wide strings.
 fn to_wstr(value: &str) -> Vec<u16> {
     OsStr::new(value)
         .encode_wide()
