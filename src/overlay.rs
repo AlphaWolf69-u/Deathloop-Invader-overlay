@@ -22,7 +22,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 use windows_sys::Win32::Foundation::SIZE;
 
 const WINDOW_CLASS_NAME: &str = "DeathloopOverlayWindow";
-const WINDOW_TITLE: &str = "Text Overlay";
+const WINDOW_TITLE: &str = "Alpha Wolf's Invader Tool Overlay";
 const OVERLAY_WIDTH: i32 = 300;
 const OVERLAY_HEIGHT: i32 = 40;
 const TIMER_ID: usize = 1;
