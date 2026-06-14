@@ -6,9 +6,10 @@ use std::os::windows::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    BLENDFUNCTION, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, DrawTextW, GetDC,
-    ReleaseDC, SelectObject, SetBkMode, SetTextColor, BITMAPINFO, BITMAPINFOHEADER, BI_RGB,
-    DIB_RGB_COLORS, DT_CENTER, DT_SINGLELINE, DT_VCENTER, TRANSPARENT,
+    AddFontMemResourceEx, BLENDFUNCTION, CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW,
+    DeleteDC, DeleteObject, DrawTextW, GetDC, LOGFONTW, ReleaseDC, RemoveFontMemResourceEx,
+    SelectObject, SetBkMode, SetTextColor, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
+    DT_CENTER, DT_SINGLELINE, DT_VCENTER, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -26,15 +27,40 @@ const OVERLAY_WIDTH: i32 = 300;
 const OVERLAY_HEIGHT: i32 = 40;
 const TIMER_ID: usize = 1;
 const TIMER_INTERVAL_MS: u32 = 100;
+const FONT_DATA: &[u8] = include_bytes!("../assets/handelson-two.otf");
+
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn register_font() -> Result<*mut core::ffi::c_void, Box<dyn std::error::Error>> {
+    let mut num_fonts = 0;
+    let resource = unsafe {
+        AddFontMemResourceEx(
+            FONT_DATA.as_ptr() as _,
+            FONT_DATA.len() as u32,
+            null_mut(),
+            &mut num_fonts,
+        )
+    };
+
+    if resource == null_mut() {
+        Err("Failed to register embedded font".into())
+    } else {
+        Ok(resource)
+    }
+}
 
 pub struct OverlayApp {
     game_process: GameProcess,
+    font_mem_resource: *mut core::ffi::c_void,
 }
 
 impl OverlayApp {
     pub fn new() -> Result<Self, Box<dyn Error>> {
         let game_process = GameProcess::attach("Deathloop.exe", "Deathloop.exe")?;
-        Ok(Self { game_process })
+        let font_mem_resource = unsafe { register_font()? };
+        Ok(Self {
+            game_process,
+            font_mem_resource,
+        })
     }
 
     pub fn run(self) {
@@ -118,7 +144,10 @@ unsafe extern "system" fn window_proc(
         }
         WM_DESTROY => {
             if let Some(app_ptr) = get_app_ptr(hwnd) {
-                drop(Box::from_raw(app_ptr));
+                let app = Box::from_raw(app_ptr);
+                if app.font_mem_resource != null_mut() {
+                    RemoveFontMemResourceEx(app.font_mem_resource);
+                }
             }
             PostQuitMessage(0);
             0
@@ -186,6 +215,16 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
     std::ptr::write_bytes(bits, 0, buffer_size);
 
     let text_wide = to_wstr(&text);
+    let mut lf: LOGFONTW = zeroed();
+    let font_name = to_wstr("Handelson Two");
+    lf.lfHeight = -24;
+    lf.lfWeight = 400;
+    lf.lfCharSet = 1;
+    for (dst, src) in lf.lfFaceName.iter_mut().zip(font_name.iter()) {
+        *dst = *src;
+    }
+    let hfont = CreateFontIndirectW(&lf);
+    let old_font = SelectObject(hdc_mem, hfont as _);
     SetBkMode(hdc_mem, TRANSPARENT as i32);
     SetTextColor(hdc_mem, 0x00FFFFFF);
     DrawTextW(
@@ -230,6 +269,8 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
         ULW_ALPHA,
     );
 
+    SelectObject(hdc_mem, old_font);
+    DeleteObject(hfont as _);
     SelectObject(hdc_mem, old_bitmap);
     DeleteDC(hdc_mem);
     DeleteObject(hbitmap);
