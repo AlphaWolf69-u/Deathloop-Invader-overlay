@@ -1,4 +1,4 @@
-﻿use deathloop_cheat::GameProcess;
+﻿use deathloop_invader_tool::GameProcess;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::mem::{size_of, zeroed};

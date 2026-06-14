@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "deathloop-cheat"
+name = "deathloop-invader-tool"
 version = "0.1.0"
 dependencies = [
  "windows-sys",
