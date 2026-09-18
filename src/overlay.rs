@@ -1,43 +1,43 @@
-﻿/// Overlay rendering module for the Deathloop Invader Tool.
+/// Overlay rendering module for the Deathloop Invader Tool.
 ///
 /// Creates a transparent, topmost overlay window that reads and displays
 /// information from the Deathloop game process memory.
-
 use deathloop_invader_tool::GameProcess;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::mem::{size_of, zeroed};
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::{null, null_mut};
+use std::time::{Duration, Instant};
+use windows_sys::Win32::Foundation::SIZE;
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{
-    AddFontMemResourceEx, BLENDFUNCTION, CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW,
-    DeleteDC, DeleteObject, DrawTextW, GetDC, LOGFONTW, ReleaseDC, RemoveFontMemResourceEx,
-    SelectObject, SetBkMode, SetTextColor, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
-    DT_CENTER, DT_SINGLELINE, DT_VCENTER, TRANSPARENT,
+    AddFontMemResourceEx, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION, CreateCompatibleDC,
+    CreateDIBSection, CreateFontIndirectW, DIB_RGB_COLORS, DT_CENTER, DeleteDC, DeleteObject,
+    DrawTextW, GetDC, LOGFONTW, ReleaseDC, RemoveFontMemResourceEx, SelectObject, SetBkMode,
+    SetTextColor, TRANSPARENT,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, LoadCursorW,
-    PostQuitMessage, RegisterClassW, SetTimer, TranslateMessage,
-    UpdateLayeredWindow, GWLP_USERDATA, IDC_ARROW, MSG, ULW_ALPHA, WM_CREATE, WM_DESTROY,
-    WM_TIMER, WNDCLASSW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
-    WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE, CREATESTRUCTW,
+    CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA,
+    GetMessageW, IDC_ARROW, KillTimer, LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SetTimer,
+    TranslateMessage, ULW_ALPHA, UpdateLayeredWindow, WM_CREATE, WM_DESTROY, WM_TIMER, WNDCLASSW,
+    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    WS_VISIBLE,
 };
-use windows_sys::Win32::Foundation::SIZE;
 
 /// Windows class name for the overlay window.
 const WINDOW_CLASS_NAME: &str = "DeathloopOverlayWindow";
 /// Window title displayed in the overlay.
 const WINDOW_TITLE: &str = "Alpha Wolf's Invader Tool Overlay";
 /// Width of the overlay window in pixels.
-const OVERLAY_WIDTH: i32 = 300;
+const OVERLAY_WIDTH: i32 = 950;
 /// Height of the overlay window in pixels.
-const OVERLAY_HEIGHT: i32 = 40;
+const OVERLAY_HEIGHT: i32 = 240;
 /// Timer ID used for periodic overlay updates.
 const TIMER_ID: usize = 1;
 /// Interval between overlay refreshes in milliseconds (100ms = 10 FPS).
-const TIMER_INTERVAL_MS: u32 = 100;
+const TIMER_INTERVAL_MS: u32 = 50;
 /// Embedded font data loaded at compile time from the assets directory.
 const FONT_DATA: &[u8] = include_bytes!("../assets/handelson-two.otf");
 
@@ -53,11 +53,11 @@ unsafe fn register_font() -> Result<*mut core::ffi::c_void, Box<dyn std::error::
             FONT_DATA.as_ptr() as _,
             FONT_DATA.len() as u32,
             null_mut(),
-            &mut num_fonts,
+            &raw mut num_fonts,
         )
     };
 
-    if resource == null_mut() {
+    if resource.is_null() {
         Err("Failed to register embedded font".into())
     } else {
         Ok(resource)
@@ -70,7 +70,12 @@ unsafe fn register_font() -> Result<*mut core::ffi::c_void, Box<dyn std::error::
 /// window creation, and cleanup.
 pub struct OverlayApp {
     /// Handle to the attached Deathloop game process.
-    game_process: GameProcess,
+    game_process: Option<GameProcess>,
+    next_attach: Instant,
+    last_text: Option<String>,
+    controls: crate::controls::Controls,
+    keyboard: crate::keyboard::Keyboard,
+    network: crate::network::Monitor,
     /// Opaque handle to the registered font resource (must be cleaned up on drop).
     font_mem_resource: *mut core::ffi::c_void,
 }
@@ -79,17 +84,22 @@ impl OverlayApp {
     /// Creates a new `OverlayApp` by attaching to the Deathloop process
     /// and registering the embedded font.
     pub fn new() -> Result<Self, Box<dyn Error>> {
-        let game_process = GameProcess::attach("Deathloop.exe", "Deathloop.exe")?;
+        let game_process = GameProcess::attach("Deathloop.exe", "Deathloop.exe").ok();
         let font_mem_resource = unsafe { register_font()? };
         Ok(Self {
             game_process,
+            next_attach: Instant::now(),
+            last_text: None,
+            controls: crate::controls::Controls::load(),
+            keyboard: crate::keyboard::Keyboard::new(),
+            network: crate::network::Monitor::default(),
             font_mem_resource,
         })
     }
 
     /// Runs the overlay application: registers the window class,
     /// creates a layered transparent window, and enters the message loop.
-    pub fn run(self) {
+    pub fn run(self) -> Result<(), Box<dyn Error>> {
         unsafe {
             let hinstance = GetModuleHandleW(null());
             let class_name = to_wstr(WINDOW_CLASS_NAME);
@@ -104,11 +114,17 @@ impl OverlayApp {
                 ..zeroed()
             };
 
-            RegisterClassW(&wnd_class);
+            if RegisterClassW(&wnd_class) == 0 {
+                return Err(std::io::Error::last_os_error().into());
+            }
 
-            let app_box = Box::into_raw(Box::new(self));
+            let mut app_box = Box::new(self);
             let hwnd = CreateWindowExW(
-                WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                WS_EX_LAYERED
+                    | WS_EX_TRANSPARENT
+                    | WS_EX_TOPMOST
+                    | WS_EX_TOOLWINDOW
+                    | WS_EX_NOACTIVATE,
                 class_name.as_ptr(),
                 title.as_ptr(),
                 WS_POPUP | WS_VISIBLE,
@@ -119,21 +135,35 @@ impl OverlayApp {
                 null_mut(),
                 null_mut(),
                 hinstance,
-                app_box as _,
+                (&mut *app_box as *mut OverlayApp).cast(),
             );
 
-            if hwnd == null_mut() {
-                drop(Box::from_raw(app_box));
-                return;
+            if hwnd.is_null() {
+                return Err(std::io::Error::last_os_error().into());
             }
 
-            SetTimer(hwnd, TIMER_ID, TIMER_INTERVAL_MS, None);
+            if SetTimer(hwnd, TIMER_ID, TIMER_INTERVAL_MS, None) == 0 {
+                let error = std::io::Error::last_os_error();
+                DestroyWindow(hwnd);
+                return Err(error.into());
+            }
+            crate::controls::tray(hwnd, true); // Keyboard controls also work without a tray icon.
 
             let mut msg = MSG::default();
-            while GetMessageW(&mut msg, null_mut(), 0, 0) != 0 {
+            loop {
+                let result = GetMessageW(&mut msg, null_mut(), 0, 0);
+                if result == 0 {
+                    break;
+                }
+                if result == -1 {
+                    let error = std::io::Error::last_os_error();
+                    DestroyWindow(hwnd);
+                    return Err(error.into());
+                }
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
+            Ok(())
         }
     }
 }
@@ -150,6 +180,21 @@ unsafe extern "system" fn window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     match msg {
+        crate::controls::TRAY_MESSAGE => {
+            if lparam as u32 == windows_sys::Win32::UI::WindowsAndMessaging::WM_RBUTTONUP
+                && let Some(app) = get_app_ptr(hwnd)
+            {
+                // TrackPopupMenu pumps messages, including timers. Keep a copy
+                // rather than borrowing application state across that loop.
+                let mut controls = (*app).controls.clone();
+                if controls.menu(hwnd) {
+                    (*app).controls = controls;
+                    (*app).network.reset();
+                    render_overlay(hwnd, &mut *app);
+                }
+            }
+            0
+        }
         WM_CREATE => {
             let create_struct = unsafe { &*(lparam as *const CREATESTRUCTW) };
             unsafe {
@@ -159,26 +204,39 @@ unsafe extern "system" fn window_proc(
                     create_struct.lpCreateParams as isize,
                 );
             }
-            if let Some(app) = get_app(hwnd) {
-                render_overlay(hwnd, app);
+            if let Some(app) = get_app_ptr(hwnd) {
+                render_overlay(hwnd, &mut *app);
             }
             0
         }
         WM_TIMER => {
-            if wparam as usize == TIMER_ID {
-                if let Some(app) = get_app(hwnd) {
-                    render_overlay(hwnd, app);
+            if wparam == TIMER_ID
+                && let Some(app) = get_app_ptr(hwnd)
+            {
+                let keys = (*app).keyboard.poll();
+                let changed = !keys.is_empty();
+                for key in keys {
+                    match key {
+                        12 => {
+                            DestroyWindow(hwnd);
+                            return 0;
+                        }
+                        6 => (*app).keyboard.hidden = !(*app).keyboard.hidden,
+                        7 => (*app).keyboard.help = !(*app).keyboard.help,
+                        _ => (*app).controls.key_toggle(key),
+                    }
+                }
+                if changed || Instant::now() >= (*app).keyboard.next_refresh {
+                    (*app).keyboard.next_refresh = Instant::now() + Duration::from_millis(250);
+                    render_overlay(hwnd, &mut *app);
                 }
             }
             0
         }
         WM_DESTROY => {
-            if let Some(app_ptr) = get_app_ptr(hwnd) {
-                let app = Box::from_raw(app_ptr);
-                if app.font_mem_resource != null_mut() {
-                    RemoveFontMemResourceEx(app.font_mem_resource);
-                }
-            }
+            crate::controls::tray(hwnd, false);
+            KillTimer(hwnd, TIMER_ID);
+            windows_sys::Win32::UI::WindowsAndMessaging::SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
             PostQuitMessage(0);
             0
         }
@@ -189,35 +247,102 @@ unsafe extern "system" fn window_proc(
 /// Retrieves the `OverlayApp` pointer stored in the window's user data.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn get_app_ptr(hwnd: HWND) -> Option<*mut OverlayApp> {
-    let ptr = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut OverlayApp;
-    if ptr.is_null() {
-        None
-    } else {
-        Some(ptr)
-    }
+    let ptr = windows_sys::Win32::UI::WindowsAndMessaging::GetWindowLongPtrW(hwnd, GWLP_USERDATA)
+        as *mut OverlayApp;
+    if ptr.is_null() { None } else { Some(ptr) }
 }
 
-/// Retrieves a mutable reference to the `OverlayApp` from the window's user data.
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn get_app(hwnd: HWND) -> Option<&'static mut OverlayApp> {
-    get_app_ptr(hwnd).map(|ptr| &mut *ptr)
+impl Drop for OverlayApp {
+    fn drop(&mut self) {
+        if !self.font_mem_resource.is_null() {
+            unsafe {
+                RemoveFontMemResourceEx(self.font_mem_resource);
+            }
+        }
+    }
 }
 
 /// Renders the overlay: reads game memory, draws text onto a bitmap,
 /// and updates the layered window with the new frame.
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
-    let text = match app.game_process.read_string(app.game_process.base_address + 0x3335638, 256) {
-        Ok(name) => format!("Host: {}", name),
-        Err(e) => format!("Error: {}", e),
+    if app.game_process.as_ref().is_some_and(|g| !g.is_running()) {
+        app.game_process = None;
+        app.next_attach = Instant::now();
+    }
+    if app.game_process.is_none() && Instant::now() >= app.next_attach {
+        app.game_process = GameProcess::attach("Deathloop.exe", "Deathloop.exe").ok();
+        app.next_attach = Instant::now() + Duration::from_secs(2);
+    }
+    let c = &app.controls;
+    let visible = c.name || c.day || c.network || (crate::EXTENDED && (c.health || c.distance));
+    let mut text = if !visible || app.keyboard.hidden {
+        String::new()
+    } else {
+        match &app.game_process {
+            Some(game) => {
+                let mut lines = Vec::new();
+                match game.opponent() {
+                    Ok(s) => {
+                        let mut identity = Vec::new();
+                        if c.name {
+                            identity.push(format!(
+                                "{}: {}",
+                                s.role.opponent_label(),
+                                s.name.as_deref().unwrap_or("waiting for opponent")
+                            ));
+                        }
+                        if c.day
+                            && s.name.is_some()
+                            && let Some(day) = s.host_day
+                        {
+                            identity.push(format!("Day {day}"));
+                        }
+                        if !identity.is_empty() {
+                            lines.push(identity.join(" | "));
+                        }
+                    }
+                    Err(_) => {
+                        if c.name || c.day {
+                            lines.push("Waiting for game session".into());
+                        }
+                    }
+                }
+                if c.network {
+                    lines.push(app.network.display(game));
+                }
+                if crate::EXTENDED
+                    && (c.health || c.distance)
+                    && let Some(extra) = crate::extra(game, c.health, c.distance)
+                {
+                    lines.push(extra);
+                }
+                lines.join("\n")
+            }
+            None => {
+                app.network.reset();
+                "Waiting for Deathloop (check process access)".into()
+            }
+        }
     };
-
-    let hdc_screen = GetDC(null_mut());
-    if hdc_screen == null_mut() {
+    if !app.keyboard.hidden
+        && let Some(hint) = app.keyboard.hint()
+    {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str(hint);
+    }
+    if app.last_text.as_deref() == Some(text.as_str()) {
         return;
     }
 
-    let mut bmi = BITMAPINFO {
+    let hdc_screen = GetDC(null_mut());
+    if hdc_screen.is_null() {
+        return;
+    }
+
+    let bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: size_of::<BITMAPINFOHEADER>() as u32,
             biWidth: OVERLAY_WIDTH,
@@ -231,14 +356,17 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
     };
 
     let mut bits: *mut core::ffi::c_void = null_mut();
-    let hbitmap = CreateDIBSection(hdc_screen, &mut bmi, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
-    if hbitmap == null_mut() || bits.is_null() {
+    let hbitmap = CreateDIBSection(hdc_screen, &bmi, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
+    if hbitmap.is_null() || bits.is_null() {
+        if !hbitmap.is_null() {
+            DeleteObject(hbitmap);
+        }
         ReleaseDC(null_mut(), hdc_screen);
         return;
     }
 
     let hdc_mem = CreateCompatibleDC(hdc_screen);
-    if hdc_mem == null_mut() {
+    if hdc_mem.is_null() {
         DeleteObject(hbitmap);
         ReleaseDC(null_mut(), hdc_screen);
         return;
@@ -254,10 +382,18 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
     lf.lfHeight = -24;
     lf.lfWeight = 400;
     lf.lfCharSet = 1;
+    lf.lfQuality = 4; // Grayscale antialiasing for transparent text.
     for (dst, src) in lf.lfFaceName.iter_mut().zip(font_name.iter()) {
         *dst = *src;
     }
     let hfont = CreateFontIndirectW(&lf);
+    if hfont.is_null() {
+        SelectObject(hdc_mem, old_bitmap);
+        DeleteDC(hdc_mem);
+        DeleteObject(hbitmap);
+        ReleaseDC(null_mut(), hdc_screen);
+        return;
+    }
     let old_font = SelectObject(hdc_mem, hfont as _);
     SetBkMode(hdc_mem, TRANSPARENT as i32);
     SetTextColor(hdc_mem, 0x00FFFFFF);
@@ -271,14 +407,16 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
             right: OVERLAY_WIDTH,
             bottom: OVERLAY_HEIGHT,
         },
-        DT_CENTER | DT_VCENTER | DT_SINGLELINE,
+        DT_CENTER | windows_sys::Win32::Graphics::Gdi::DT_NOPREFIX,
     );
 
-    let pixels = std::slice::from_raw_parts_mut(bits as *mut u32, (buffer_size / 4) as usize);
+    let pixels = std::slice::from_raw_parts_mut(bits as *mut u32, buffer_size / 4);
     for pixel in pixels.iter_mut() {
-        if (*pixel & 0x00FF_FFFF) != 0 {
-            *pixel |= 0xFF00_0000;
-        }
+        // White-on-black RGB is already premultiplied coverage.
+        let coverage = (*pixel & 255)
+            .max((*pixel >> 8) & 255)
+            .max((*pixel >> 16) & 255);
+        *pixel = (*pixel & 0x00FF_FFFF) | (coverage << 24);
     }
 
     let blend = BLENDFUNCTION {
@@ -288,7 +426,7 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
         AlphaFormat: 1,
     };
 
-    UpdateLayeredWindow(
+    let updated = UpdateLayeredWindow(
         hwnd,
         hdc_screen,
         null_mut(),
@@ -309,6 +447,9 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
     DeleteDC(hdc_mem);
     DeleteObject(hbitmap);
     ReleaseDC(null_mut(), hdc_screen);
+    if updated != 0 {
+        app.last_text = Some(text);
+    }
 }
 
 /// Converts a Rust `&str` to a null-terminated UTF-16 wide string (`Vec<u16>`).

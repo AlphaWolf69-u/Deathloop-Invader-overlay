@@ -1,198 +1,285 @@
-/// Memory reading utilities for interacting with the Deathloop process.
-///
-/// This module provides the `GameProcess` struct which wraps Windows API calls
-/// to attach to a game process, read its memory, and retrieve strings.
-
+//! Read-only access for the researched Deathloop executable build.
+use std::mem::{MaybeUninit, size_of};
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE},
+    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
     System::{
         Diagnostics::Debug::ReadProcessMemory,
         Diagnostics::ToolHelp::{
-            CreateToolhelp32Snapshot, Module32First, Module32Next, TH32CS_SNAPMODULE, MODULEENTRY32,
+            CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, Module32NextW,
+            PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPMODULE,
+            TH32CS_SNAPPROCESS,
         },
-        ProcessStatus::{EnumProcesses},
-        Threading::{OpenProcess, PROCESS_VM_READ, PROCESS_QUERY_INFORMATION},
+        Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
     },
 };
-
-/// Represents an attached game process for memory reading.
-///
-/// Wraps a Windows process handle along with the base address of the target module
-/// and the process ID. Provides methods for reading arbitrary memory values and strings.
+struct OwnedHandle(HANDLE);
+impl Drop for OwnedHandle {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.0);
+        }
+    }
+}
+mod sealed {
+    pub trait Sealed {}
+}
+/// Only primitive types with no invalid bit patterns can be read safely.
+pub trait MemoryValue: sealed::Sealed + Copy {}
+macro_rules! values {($($t:ty),*)=>{$(impl sealed::Sealed for $t{} impl MemoryValue for $t{})*};}
+values!(u8, u16, u32, u64, i8, i16, i32, i64, f32, f64);
 pub struct GameProcess {
-    /// Windows handle to the target process.
-    pub handle: HANDLE,
-    /// Base memory address of the loaded module.
+    handle: OwnedHandle,
     pub base_address: u64,
-    /// Process ID of the target process.
     pub pid: u32,
 }
-
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Role {
+    Host,
+    Invader,
+}
+impl Role {
+    pub fn opponent_label(self) -> &'static str {
+        match self {
+            Self::Host => "Invader",
+            Self::Invader => "Host",
+        }
+    }
+    pub fn opponent_name_rva(self) -> u64 {
+        match self {
+            Self::Host => 0x3334F68,
+            Self::Invader => 0x3335638,
+        }
+    }
+    fn from_flag(v: u8) -> Result<Self, String> {
+        match v {
+            0 => Ok(Self::Invader),
+            1 => Ok(Self::Host),
+            _ => Err("Invalid host/client flag".into()),
+        }
+    }
+}
+#[derive(Debug)]
+pub struct OpponentSnapshot {
+    pub role: Role,
+    pub name: Option<String>,
+    pub player_count: usize,
+    pub host_day: Option<i32>,
+}
+impl OpponentSnapshot {
+    pub fn display(&self) -> String {
+        match &self.name {
+            Some(n) => match (self.role, self.host_day) {
+                (Role::Invader, Some(day)) => format!("Host: {n} | Day {day}"),
+                _ => format!("{}: {}", self.role.opponent_label(), n),
+            },
+            None => format!("{}: waiting for opponent", self.role.opponent_label()),
+        }
+    }
+}
 impl GameProcess {
-    /// Attaches to a running process by name and finds its module base address.
-    ///
-    /// # Arguments
-    /// * `process_name` - Name of the executable process to attach to (e.g., "Deathloop.exe")
-    /// * `module_name` - Name of the module to find the base address of
-    ///
-    /// # Returns
-    /// A `GameProcess` instance on success, or an error string on failure.
     pub fn attach(process_name: &str, module_name: &str) -> Result<Self, String> {
-        let pid = find_process_by_name(process_name)
-            .ok_or_else(|| format!("Process {} not found", process_name))?;
-
-        let handle = unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, 0, pid) };
-        if handle.is_null() {
-            return Err("Failed to open process. Run as Administrator!".to_string());
+        let pid =
+            find_process(process_name).ok_or_else(|| format!("{process_name} is not running"))?;
+        let raw = unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, 0, pid) };
+        if raw.is_null() {
+            return Err(format!("OpenProcess: {}", std::io::Error::last_os_error()));
         }
-
-        let base_address = get_module_base(pid, module_name)
-            .ok_or_else(|| "Could not find module base".to_string())?;
-
-        println!("Attached to {} | Base: {:X}", process_name, base_address);
-
-        Ok(GameProcess { handle, base_address, pid })
+        let handle = OwnedHandle(raw); // also closes on module lookup failure
+        let base_address = module_base(pid, module_name).ok_or("Module unavailable")?;
+        Ok(Self {
+            handle,
+            base_address,
+            pid,
+        })
     }
-
-    /// Reads a value of type `T` from the specified memory address.
-    ///
-    /// # Arguments
-    /// * `address` - Absolute memory address to read from
-    ///
-    /// # Returns
-    /// The decoded value of type `T` on success, or an error string.
-    pub fn read_memory<T: Copy>(&self, address: u64) -> Result<T, String> {
-        let mut value = unsafe { std::mem::zeroed() };
-        let size = std::mem::size_of::<T>();
-        let mut bytes_read = 0usize;
-
-        let success = unsafe {
+    pub fn is_running(&self) -> bool {
+        let mut code = 0;
+        unsafe { GetExitCodeProcess(self.handle.0, &mut code) != 0 && code == 259 }
+    }
+    pub fn read_memory<T: MemoryValue>(&self, address: u64) -> Result<T, String> {
+        let mut value = MaybeUninit::<T>::uninit();
+        let mut got = 0;
+        let ok = unsafe {
             ReadProcessMemory(
-                self.handle,
+                self.handle.0,
                 address as _,
-                &mut value as *mut _ as _,
-                size,
-                &mut bytes_read,
+                value.as_mut_ptr() as _,
+                size_of::<T>(),
+                &mut got,
             )
         };
-
-        if success == 0 || bytes_read != size {
-            return Err(format!("Failed to read memory at {:X}", address));
+        if ok == 0 || got != size_of::<T>() {
+            return Err(format!("Unreadable memory at {address:X}"));
         }
-
-        Ok(value)
+        Ok(unsafe { value.assume_init() })
     }
-
-    /// Reads a null-terminated UTF-8 string from the specified memory address.
-    ///
-    /// # Arguments
-    /// * `address` - Absolute memory address to read from
-    /// * `max_len` - Maximum number of bytes to read
-    ///
-    /// # Returns
-    /// A `String` on success, or an error string.
     pub fn read_string(&self, address: u64, max_len: usize) -> Result<String, String> {
-        let mut buf = vec![0u8; max_len];
-        let mut bytes_read = 0usize;
-
-        let success = unsafe {
-            ReadProcessMemory(
-                self.handle,
-                address as _,
-                buf.as_mut_ptr() as _,
-                max_len,
-                &mut bytes_read,
-            )
+        let mut bytes = Vec::new();
+        for i in 0..max_len {
+            let b = self.read_memory::<u8>(address + i as u64)?;
+            if b == 0 {
+                return Ok(String::from_utf8_lossy(&bytes).into_owned());
+            }
+            bytes.push(b);
+        }
+        Err("Unterminated name buffer".into())
+    }
+    pub fn opponent(&self) -> Result<OpponentSnapshot, String> {
+        let game = self.read_memory::<u64>(self.base_address + 0x5BD1010)?;
+        if game < 0x10000 || self.read_memory::<u64>(game)? != self.base_address + 0x2613250 {
+            return Err("Waiting for a supported game session".into());
+        }
+        let flag = self.read_memory::<u8>(game + 0x6A730)?;
+        let role = Role::from_flag(flag)?;
+        let list = self.read_memory::<u64>(game + 0x210)?;
+        let count = self.read_memory::<u32>(game + 0x21C)?;
+        if count > 4 || (count > 0 && list < 0x10000) {
+            return Err("Player list unavailable".into());
+        }
+        let mut ids = Vec::new();
+        for i in 0..count {
+            let id = self.read_memory::<u64>(list + u64::from(i) * 8)?;
+            if id != u64::MAX && id != 0 && !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+        // Buffers can retain names from the last match: require a second loaded player.
+        let name = if ids.len() >= 2 {
+            let text = self.read_string(self.base_address + role.opponent_name_rva(), 32)?;
+            let text = text.trim();
+            if text.is_empty() || text.chars().any(char::is_control) {
+                None
+            } else {
+                Some(text.to_owned())
+            }
+        } else {
+            None
         };
-
-        if success == 0 {
-            return Err(format!("Failed to read string at {:X}", address));
+        // On a client this manager holds the replicated host campaign. Never
+        // attach the local host's day to the invading opponent's name.
+        let host_day = if role == Role::Invader && name.is_some() {
+            self.host_campaign_day(game).ok()
+        } else {
+            None
+        };
+        if self.read_memory::<u64>(self.base_address + 0x5BD1010)? != game
+            || self.read_memory::<u8>(game + 0x6A730)? != flag
+            || self.read_memory::<u64>(game + 0x210)? != list
+            || self.read_memory::<u32>(game + 0x21C)? != count
+        {
+            return Err("Session changing".into());
         }
-
-        let null_pos = buf.iter().position(|&b| b == 0).unwrap_or(bytes_read);
-        Ok(String::from_utf8_lossy(&buf[..null_pos]).to_string())
+        Ok(OpponentSnapshot {
+            role,
+            name,
+            player_count: ids.len(),
+            host_day,
+        })
+    }
+    fn host_campaign_day(&self, game: u64) -> Result<i32, String> {
+        let manager = self.read_memory::<u64>(game + 0x34D8)?;
+        if manager < 0x10000 || self.read_memory::<u64>(manager)? != self.base_address + 0x2693B50 {
+            return Err("Campaign unavailable".into());
+        }
+        let day = self.read_memory::<i32>(manager + 0x80)?;
+        if day < 0 || self.read_memory::<u64>(game + 0x34D8)? != manager {
+            return Err("Campaign changing".into());
+        }
+        // Display the transmitted counter unchanged; no inferred +1 adjustment.
+        Ok(day)
     }
 }
-
-/// Automatically closes the process handle when `GameProcess` is dropped.
-impl Drop for GameProcess {
-    fn drop(&mut self) {
-        unsafe { CloseHandle(self.handle); }
+fn wide(buf: &[u16]) -> String {
+    String::from_utf16_lossy(&buf[..buf.iter().position(|v| *v == 0).unwrap_or(buf.len())])
+}
+fn snapshot(flags: u32, pid: u32) -> Option<OwnedHandle> {
+    let h = unsafe { CreateToolhelp32Snapshot(flags, pid) };
+    if h == INVALID_HANDLE_VALUE || h.is_null() {
+        None
+    } else {
+        Some(OwnedHandle(h))
     }
 }
-
-
-/// Finds the process ID of a running process by its executable name.
-///
-/// Enumerates all processes using `EnumProcesses` and matches the name
-/// using `K32GetModuleBaseNameA` for reliable name retrieval.
-fn find_process_by_name(name: &str) -> Option<u32> {
-    let mut pids = [0u32; 1024];
-    let mut bytes_returned = 0u32;
-
-    unsafe {
-        EnumProcesses(pids.as_mut_ptr(), (pids.len() * 4) as u32, &mut bytes_returned);
-    }
-
-    let count = bytes_returned as usize / 4;
-
-    for &pid in &pids[0..count] {
-        if pid == 0 { continue; }
-
-        let h = unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, 0, pid) };
-        if h.is_null() { continue; }
-
-        let mut module_buf = [0u8; 260];
-        // Use K32GetModuleBaseNameA from kernel32 (more reliable)
-        unsafe { windows_sys::Win32::System::ProcessStatus::K32GetModuleBaseNameA(
-            h, std::ptr::null_mut(), module_buf.as_mut_ptr(), module_buf.len() as u32
-        ); }
-        unsafe { CloseHandle(h); }
-
-        if let Ok(m) = std::str::from_utf8(&module_buf) {
-            if m.trim_end_matches('\0').eq_ignore_ascii_case(name) {
-                return Some(pid);
-            }
+fn find_process(name: &str) -> Option<u32> {
+    let h = snapshot(TH32CS_SNAPPROCESS, 0)?;
+    let mut e: PROCESSENTRY32W = unsafe { std::mem::zeroed() };
+    e.dwSize = size_of::<PROCESSENTRY32W>() as u32;
+    let mut ok = unsafe { Process32FirstW(h.0, &mut e) };
+    while ok != 0 {
+        if wide(&e.szExeFile).eq_ignore_ascii_case(name) {
+            return Some(e.th32ProcessID);
         }
+        ok = unsafe { Process32NextW(h.0, &mut e) };
     }
     None
 }
-
-/// Finds the base address of a loaded module within a process.
-///
-/// Uses the Module32 API to enumerate modules in the target process
-/// and returns the base address of the matching module.
-fn get_module_base(pid: u32, module_name: &str) -> Option<u64> {
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid) };
-    if snapshot.is_null() {
-        return None;
-    }
-
-    let mut me = MODULEENTRY32 {
-        dwSize: std::mem::size_of::<MODULEENTRY32>() as u32,
-        ..unsafe { std::mem::zeroed() }
-    };
-
-    if unsafe { Module32First(snapshot, &mut me) } != 0 {
-        loop {
-            let mod_name = unsafe {
-                let slice = std::slice::from_raw_parts(me.szModule.as_ptr() as *const u8, me.szModule.len());
-                std::str::from_utf8(slice)
-                    .unwrap_or("")
-                    .trim_end_matches('\0')
-            };
-
-            if mod_name.eq_ignore_ascii_case(module_name) {
-                unsafe { CloseHandle(snapshot) };
-                return Some(me.modBaseAddr as u64);
-            }
-
-            if unsafe { Module32Next(snapshot, &mut me) } == 0 {
-                break;
-            }
+fn module_base(pid: u32, name: &str) -> Option<u64> {
+    let h = snapshot(TH32CS_SNAPMODULE, pid)?;
+    let mut e: MODULEENTRY32W = unsafe { std::mem::zeroed() };
+    e.dwSize = size_of::<MODULEENTRY32W>() as u32;
+    let mut ok = unsafe { Module32FirstW(h.0, &mut e) };
+    while ok != 0 {
+        if wide(&e.szModule).eq_ignore_ascii_case(name) {
+            return Some(e.modBaseAddr as u64);
         }
+        ok = unsafe { Module32NextW(h.0, &mut e) };
     }
-
-    unsafe { CloseHandle(snapshot) };
     None
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn other_player() {
+        assert_eq!(Role::from_flag(1).unwrap().opponent_name_rva(), 0x3334F68);
+        assert_eq!(Role::from_flag(0).unwrap().opponent_name_rva(), 0x3335638);
+        assert!(Role::from_flag(2).is_err());
+    }
+    #[test]
+    fn labels() {
+        assert_eq!(
+            OpponentSnapshot {
+                role: Role::Host,
+                name: Some("Juli".into()),
+                player_count: 2,
+                host_day: Some(219),
+            }
+            .display(),
+            "Invader: Juli"
+        );
+        assert_eq!(
+            OpponentSnapshot {
+                role: Role::Invader,
+                name: Some("Colt".into()),
+                player_count: 2,
+                host_day: Some(219),
+            }
+            .display(),
+            "Host: Colt | Day 219"
+        );
+        assert_eq!(
+            OpponentSnapshot {
+                role: Role::Host,
+                name: None,
+                player_count: 1,
+                host_day: None,
+            }
+            .display(),
+            "Invader: waiting for opponent"
+        );
+    }
+    #[test]
+    fn missing_day_keeps_name_and_missing_opponent_hides_day() {
+        let mut snapshot = OpponentSnapshot {
+            role: Role::Invader,
+            name: Some("Colt".into()),
+            player_count: 2,
+            host_day: None,
+        };
+        assert_eq!(snapshot.display(), "Host: Colt");
+        snapshot.host_day = Some(0);
+        assert_eq!(snapshot.display(), "Host: Colt | Day 0");
+        snapshot.name = None;
+        assert_eq!(snapshot.display(), "Host: waiting for opponent");
+    }
 }
