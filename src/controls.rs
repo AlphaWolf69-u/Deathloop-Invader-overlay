@@ -166,7 +166,10 @@ pub fn tray(hwnd: HWND, add: bool) -> bool {
         data.uID = 1;
         data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         data.uCallbackMessage = TRAY_MESSAGE;
-        data.hIcon = LoadIconW(std::ptr::null_mut(), IDI_APPLICATION);
+        data.hIcon = LoadIconW(
+            windows_sys::Win32::System::LibraryLoader::GetModuleHandleW(std::ptr::null()),
+            101usize as *const u16,
+        );
         let label = if crate::EXTENDED {
             "Deathloop detailed overlay - right-click controls"
         } else {

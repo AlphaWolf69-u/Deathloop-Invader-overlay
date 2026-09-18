@@ -110,6 +110,10 @@ impl OverlayApp {
                 hInstance: hinstance,
                 lpszClassName: class_name.as_ptr(),
                 hCursor: LoadCursorW(null_mut(), IDC_ARROW),
+                hIcon: windows_sys::Win32::UI::WindowsAndMessaging::LoadIconW(
+                    hinstance,
+                    101usize as *const u16,
+                ),
                 style: 0,
                 ..zeroed()
             };
