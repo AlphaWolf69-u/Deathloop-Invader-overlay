@@ -2,6 +2,7 @@
 
 mod controls;
 mod keyboard;
+mod matchmaking;
 mod network;
 mod overlay;
 const EXTENDED: bool = false;
@@ -24,6 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             game.opponent()?
         );
         println!("Network: {:?}", network::read(&game));
+        println!("Matchmaking: {:?}", matchmaking::read(&game));
         return Ok(());
     }
     let app = overlay::OverlayApp::new()?;

@@ -33,7 +33,7 @@ const WINDOW_TITLE: &str = "Alpha Wolf's Invader Tool Overlay";
 /// Width of the overlay window in pixels.
 const OVERLAY_WIDTH: i32 = 950;
 /// Height of the overlay window in pixels.
-const OVERLAY_HEIGHT: i32 = 240;
+const OVERLAY_HEIGHT: i32 = 320;
 /// Timer ID used for periodic overlay updates.
 const TIMER_ID: usize = 1;
 /// Interval between overlay refreshes in milliseconds (100ms = 10 FPS).
@@ -76,6 +76,7 @@ pub struct OverlayApp {
     controls: crate::controls::Controls,
     keyboard: crate::keyboard::Keyboard,
     network: crate::network::Monitor,
+    matching: crate::matchmaking::Cache,
     /// Opaque handle to the registered font resource (must be cleaned up on drop).
     font_mem_resource: *mut core::ffi::c_void,
 }
@@ -93,6 +94,7 @@ impl OverlayApp {
             controls: crate::controls::Controls::load(),
             keyboard: crate::keyboard::Keyboard::new(),
             network: crate::network::Monitor::default(),
+            matching: crate::matchmaking::Cache::default(),
             font_mem_resource,
         })
     }
@@ -278,6 +280,7 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
         app.game_process = GameProcess::attach("Deathloop.exe", "Deathloop.exe").ok();
         app.next_attach = Instant::now() + Duration::from_secs(2);
     }
+    app.matching.update(app.game_process.as_ref());
     let c = &app.controls;
     let visible = c.name || c.day || c.network || (crate::EXTENDED && (c.health || c.distance));
     let mut text = if !visible || app.keyboard.hidden {
@@ -314,6 +317,7 @@ unsafe fn render_overlay(hwnd: HWND, app: &mut OverlayApp) {
                 }
                 if c.network {
                     lines.push(app.network.display(game));
+                    lines.push(app.matching.region());
                 }
                 if crate::EXTENDED
                     && (c.health || c.distance)

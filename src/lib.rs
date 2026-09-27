@@ -124,6 +124,26 @@ impl GameProcess {
         }
         Err("Unterminated name buffer".into())
     }
+    pub fn read_bytes(&self, address: u64, length: usize) -> Result<Vec<u8>, String> {
+        if address < 0x10000 || length > 16385 {
+            return Err("Invalid bounded read".into());
+        }
+        let mut bytes = vec![0u8; length];
+        let mut got = 0usize;
+        let ok = unsafe {
+            ReadProcessMemory(
+                self.handle.0,
+                address as _,
+                bytes.as_mut_ptr() as _,
+                length,
+                &mut got,
+            )
+        };
+        if ok == 0 || got != length {
+            return Err("Matching buffer unavailable".into());
+        }
+        Ok(bytes)
+    }
     pub fn opponent(&self) -> Result<OpponentSnapshot, String> {
         let game = self.read_memory::<u64>(self.base_address + 0x5BD1010)?;
         if game < 0x10000 || self.read_memory::<u64>(game)? != self.base_address + 0x2613250 {

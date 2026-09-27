@@ -17,6 +17,11 @@ same privilege level as the game (Administrator when required).
 - No second loaded player: **waiting for opponent**.
 - During loading: **Waiting for game session**.
 
+Network statistics also show the opponent's advertised Azure region and their
+latency to that region. This is matching metadata, not physical location or peer
+ping. Multiple advertised regions are indicated explicitly. Enable or disable
+it with the network group (Ctrl+Alt+F3 or the tray menu).
+
 
 
 `deathloop-invader-tool.exe --inspect` prints a one-shot read-only role/name/player
